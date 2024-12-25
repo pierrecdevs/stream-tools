@@ -11,6 +11,7 @@ export interface OBSWebSocketEvents {
   'obsws-close': [CloseEvent];
   'obsws-auth-required': [any];
   'obsws-authenticated': [];
+  'obsws-scene-list': [any];
 }
 
 class OBSWebSocket extends EventSystem<OBSWebSocketEvents> {
@@ -76,6 +77,33 @@ class OBSWebSocket extends EventSystem<OBSWebSocketEvents> {
     }
   }
 
+  sendCaption(caption: string) {
+    this.send(6, {
+      'requestType': 'SendStreamCaption',
+      'requestData': {
+        'captionText': caption,
+      }
+    });
+  }
+
+  setCurrentProgramSceneByName(name: string) {
+    this.send(6, {
+      'requestType': 'SetCurrentProgramScene',
+      'requestData': {
+        'sceneName': name,
+      },
+    });
+
+  }
+  setCurrentProgramSceneByUuid(uuid: string) {
+    this.send(6, {
+      'requestType': 'SetCurrentProgramScene',
+      'requestData': {
+        'sceneUuid': uuid,
+      }
+    });
+  }
+
   getSceneList() {
     this.send(6, {
       'requestType': 'GetSceneList',
@@ -98,6 +126,7 @@ class OBSWebSocket extends EventSystem<OBSWebSocketEvents> {
       const { requestType } = d;
       switch (requestType) {
         case 'GetSceneList':
+          this.emit('obsws-scene-list', d);
           break;
         case 'GetSceneItemList':
           break;
