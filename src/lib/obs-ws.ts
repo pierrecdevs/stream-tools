@@ -1,6 +1,6 @@
 import EventSystem from './event-system';
 import CryptoJS from 'crypto-js';
-import { v4 as uuid } from 'uuid';
+import { v4 as uuid, UUIDTypes } from 'uuid';
 
 export interface OBSWebSocketEvents {
   'obsws-scene-switched': [object];
@@ -95,7 +95,7 @@ class OBSWebSocket extends EventSystem<OBSWebSocketEvents> {
     });
 
   }
-  setCurrentProgramSceneByUuid(uuid: string) {
+  setCurrentProgramSceneByUuid(uuid: UUIDTypes | string) {
     this.send(6, {
       'requestType': 'SetCurrentProgramScene',
       'requestData': {

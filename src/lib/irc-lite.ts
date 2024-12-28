@@ -17,7 +17,7 @@ class IrcLite extends EventSystem<IrcEvents> {
   private ws!: WebSocket;
   protected nick: string = '';
   protected name: string = '';
-  protected email: string = '';
+  protected hostname: string = '';
   protected password: string = '';
 
   constructor() {
@@ -27,12 +27,12 @@ class IrcLite extends EventSystem<IrcEvents> {
   connect(
     nick: string,
     name: string = '',
-    email: string = '',
+    hostname: string = '',
     password: string = '',
   ) {
     this.nick = nick;
     this.name = name ?? nick;
-    this.email = email ?? `${nick}@${nick}`;
+    this.hostname = hostname ?? `${nick}@${nick}`;
     this.password = password ?? '';
     this.ws = new WebSocket(CHAT_URL);
     this.ws.onopen = this.onOpen.bind(this);
@@ -94,6 +94,7 @@ class IrcLite extends EventSystem<IrcEvents> {
     } catch (ex) { }
   }
 
+  /** Events */
   onOpen(e: Event) {
     try {
       this.emit('irc-connected', e);

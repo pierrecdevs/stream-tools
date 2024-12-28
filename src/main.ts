@@ -42,11 +42,11 @@ obsws.on('obsws-authenticated', () => {
   enableControls();
   const username = import.meta.env.VITE_TWITCH_USERNAME.toLowerCase();
   const pass = import.meta.env.VITE_TWITCH_OAUTH_TOKEN;
-  const email = `${username}@${username}.tmi.twitch.tv`;
+  const hostname = `${username}.tmi.twitch.tv`;
   chat.connect(
     username,
     username,
-    email,
+    hostname,
     pass,
   );
 });
