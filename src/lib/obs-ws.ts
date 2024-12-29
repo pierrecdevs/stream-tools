@@ -12,6 +12,8 @@ export interface OBSWebSocketEvents {
   'obsws-auth-required': [any];
   'obsws-authenticated': [];
   'obsws-scene-list': [any];
+  'obsws-scene-item-list': [any];
+  'obsws-scene-item-id': [any];
 }
 
 class OBSWebSocket extends EventSystem<OBSWebSocketEvents> {
@@ -87,29 +89,111 @@ class OBSWebSocket extends EventSystem<OBSWebSocketEvents> {
   }
 
   setCurrentProgramSceneByName(name: string) {
-    this.send(6, {
-      'requestType': 'SetCurrentProgramScene',
-      'requestData': {
-        'sceneName': name,
-      },
-    });
-
+    try {
+      this.send(6, {
+        'requestType': 'SetCurrentProgramScene',
+        'requestData': {
+          'sceneName': name,
+        },
+      });
+      this.getSceneItemListByName(name);
+    } catch (ex) {
+      const err = ex as Error;
+      throw new Error(`setCurrentProgramSceneByName failled: ${err.message}`);
+    }
   }
+
   setCurrentProgramSceneByUuid(uuid: UUIDTypes | string) {
-    this.send(6, {
-      'requestType': 'SetCurrentProgramScene',
-      'requestData': {
-        'sceneUuid': uuid,
-      }
-    });
+    try {
+      this.send(6, {
+        'requestType': 'SetCurrentProgramScene',
+        'requestData': {
+          'sceneUuid': uuid,
+        }
+      });
+
+      this.getSceneItemListByUuid(uuid);
+
+    } catch (ex) {
+      const err = ex as Error;
+      throw new Error(`setCurrentProgramSceneByUuid failed: ${err.message}`);
+    }
+  }
+
+  setSceneItemEnabled(sceneName: string, sceneItemId: number, sceneItemEnabled: boolean) {
+    try {
+      this.send(6, {
+        'requestType': 'SetSceneItemEnabled',
+        'requestData': {
+          sceneName,
+          sceneItemId,
+          sceneItemEnabled
+        }
+      });
+
+    } catch (ex) {
+      const err = ex as Error;
+      throw new Error(`setSceneItemEnabled failed: ${err.message}`);
+    }
   }
 
   getSceneList() {
-    this.send(6, {
-      'requestType': 'GetSceneList',
-    });
+    try {
+      this.send(6, {
+        'requestType': 'GetSceneList',
+      });
+    } catch (ex) {
+      const err = ex as Error
+      throw new Error(`getSceneList failed: ${err.message}`);
+    }
   }
 
+  getSceneItemListByName(sceneName: string) {
+    try {
+      this.send(6, {
+        'requestType': 'GetSceneItemList',
+        'requestData': {
+          'sceneName': sceneName,
+        }
+      });
+    } catch (ex) {
+      const error = ex as Error;
+      throw new Error(`getSceneItemListByName failed: ${error.message}`);
+    }
+
+  }
+
+  getSceneItemListByUuid(sceneUuid: UUIDTypes | string) {
+    try {
+      this.send(6, {
+        'requestType': 'GetSceneItemList',
+        'requestData': {
+          'sceneUuid': sceneUuid,
+        }
+      });
+    } catch (ex) {
+      const error = ex as Error;
+      throw new Error(`getSceneItemListByUuid failed: ${error.message}`);
+    }
+  }
+
+  getSceneItemId(sceneName: string, sourceName: string) {
+    try {
+      this.send(6, {
+        'requestType': 'GetSceneItemId',
+        'requestData': {
+          sceneName,
+          sourceName
+        }
+      });
+    } catch (ex) {
+      const error = ex as Error;
+      throw new Error(`getSceneItemId failed: ${error.message}`);
+    }
+  }
+
+
+  // --- EVENTS ---
   onOpen(event: Event) {
     this.emit('obsws-open', event);
   }
@@ -129,11 +213,19 @@ class OBSWebSocket extends EventSystem<OBSWebSocketEvents> {
           this.emit('obsws-scene-list', d);
           break;
         case 'GetSceneItemList':
-          break;
-        case 'GetSceneItemId':
+          this.emit('obsws-scene-item-list', d);
           break;
         case 'GetCurrentProgramScene':
           break;
+        case 'GetSceneItemId':
+          this.emit('obsws-scene-item-id', d);
+          break;
+        case 'SetCurrentProgramScene':
+          break;
+        case 'SendStreamCaption':
+          break;
+        default:
+          this.emit('obsws-message', event);
       }
     } else {
       this.emit('obsws-message', event);
