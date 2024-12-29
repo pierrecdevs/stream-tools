@@ -11,16 +11,14 @@ const main = (): [OBSWebSocket, VoiceCaptioning, IrcLite] => {
   return [
     new OBSWebSocket(),
     new VoiceCaptioning(),
-    new IrcLite(
-      import.meta.env.VITE_TWITCH_USERNAME,
-      import.meta.env.VITE_TWITCH_OAUTH_TOKEN
-    ),
+    new IrcLite(),
   ];
 };
 
 
 const [obsws, vc, chat]: [OBSWebSocket, VoiceCaptioning, IrcLite] = main();
-let lastScene: SceneItem = null;
+let lastScene: SceneItem | null = null;
+let privacySource: number | string = '';
 
 obsws.on('obsws-open', (m: any) => {
   console.log('open', m);
@@ -57,9 +55,10 @@ obsws.on('obsws-error', (e) => {
 
 obsws.on('obsws-scene-list', (data) => {
   const { responseData } = data
-  const { currentPreviewSceneName, currentProgramSceneName, scenes } = responseData;
+  const { _currentPreviewSceneName, currentProgramSceneName, scenes } = responseData;
   const sceneList = document.getElementById('selSceneList') as HTMLSelectElement;
 
+  // implemented a "clear" function
   do {
     sceneList.options.remove(0);
   } while (sceneList.options.length > 0);
@@ -67,9 +66,10 @@ obsws.on('obsws-scene-list', (data) => {
   for (let scene: SceneItem of scenes) {
     sceneList.options.add(new Option(scene.sceneName, scene.sceneUuid));
     if (scene.sceneName.toLowerCase() === currentProgramSceneName.toLowerCase()) {
-      console.log('FOUND', scene);
+      console.log('Current Program Scene', scene);
       lastScene = scene;
       sceneList.options.selectedIndex = scene.sceneIndex;
+      obsws.getSceneItemId('Screens', 'Privacy Screen');
     }
   }
 
@@ -78,6 +78,19 @@ obsws.on('obsws-scene-list', (data) => {
     obsws.setCurrentProgramSceneByUuid(e.currentTarget.value);
   });
 
+});
+
+obsws.on('obsws-scene-item-list', (e: any) => {
+  console.log('Scene Item List', e);
+});
+
+obsws.on('obsws-scene-item-id', (e: any) => {
+  const { responseData } = e;
+  if (responseData.sceneItemId) {
+    privacySource = responseData.sceneItemId;
+    console.log('found privacy screen', e);
+  } else {
+  }
 });
 
 chat.on('irc-connected', (e) => {
@@ -100,6 +113,9 @@ chat.on('irc-close', (e) => {
   console.warn('IRC Closed', e);
 });
 
+chat.on('irc-channel-join', (e) => {
+  console.log(`${e.nick} has joined ${e.channel}`);
+});
 
 obsws.connect(`ws://${import.meta.env.VITE_OBS_WEBSOCKET_HOST}:${import.meta.env.VITE_OBS_WEBSOCKET_PORT}`);
 
@@ -120,19 +136,21 @@ vc.on('vc-result', (r: string[]) => {
   const brbPattern = /(be right back|I'll be back)/i;
   const backPattern = /(I'm back|I have arrived)/i
   const privacyPattern = /(privacy please|hide screen)/i;
-  const githubPattern = /(my github|my personal github|my work github)/i
+  const githubPattern = /(check out my github|my personal github|my work github)/i
 
   const patterns = [brbPattern, backPattern, privacyPattern, githubPattern];
 
   const found = patterns.filter(f => f.test(caption));
-  console.log('FOUND', found);
+  if (found.length > 0) console.log('FOUND', found);
 
   if (brbPattern.test(caption)) {
     obsws.setCurrentProgramSceneByName('scene.brb');
   } else if (privacyPattern.test(caption)) {
-    render('SCREEN IS NOW HIDDEN...kind of.. work in progress');
+    render('SCREEN IS HIDDEN FOR PRIVACY REASONS, THANK YOU FOR YOUR PATIENCE');
+    obsws.setSceneItemEnabled('Screens', +privacySource, true);
   } else if (backPattern.test(caption)) {
     obsws.setCurrentProgramSceneByUuid(lastScene.sceneUuid);
+    obsws.setSceneItemEnabled('Screens', +privacySource, false);
   } else if (githubPattern.test(caption)) {
     const matches = caption.match(githubPattern);
     const match = matches![1];
