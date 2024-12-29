@@ -54,7 +54,6 @@ class VoiceCaptioning extends EventSystem<VoiceCaptioningEvents> {
   }
 
   onResult(event: SpeechRecognitionEvent) {
-
     const transcripts: string[] = [];
     for (let i = event.resultIndex; i < event.results.length; ++i) {
       const { transcript } = event.results[i][0];
