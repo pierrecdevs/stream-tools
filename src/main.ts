@@ -1,22 +1,24 @@
 import './style.css'
-import VoiceCaptioning from './lib/voice-captioning.ts'
-import OBSWebSocket from './lib/obs-ws.ts';
-import SceneItem from './interfaces/SceneItem.ts';
-import IrcLite from './lib/irc-lite.ts';
+import VoiceCaptioning from './lib/voice-captioning'
+import OBSWebSocket from './lib/obs-ws';
+import SceneItem from './interfaces/SceneItem';
+import IrcLite from './lib/irc-lite';
+import TTS from './lib/tts';
 
 // Entrypoint
 // @description wrapper function that returns all the objects
 // @returns [OBSWebSocket, VoiceCaptioning]
-const main = (): [OBSWebSocket, VoiceCaptioning, IrcLite] => {
+const main = (): [OBSWebSocket, VoiceCaptioning, TTS, IrcLite] => {
   return [
     new OBSWebSocket(),
     new VoiceCaptioning(),
+    new TTS(),
     new IrcLite(),
   ];
 };
 
 
-const [obsws, vc, chat]: [OBSWebSocket, VoiceCaptioning, IrcLite] = main();
+const [obsws, vc, tts, chat]: [OBSWebSocket, VoiceCaptioning, TTS, IrcLite] = main();
 let lastScene: SceneItem | null = null;
 let privacySource: number | string = '';
 
@@ -55,7 +57,7 @@ obsws.on('obsws-error', (e) => {
 
 obsws.on('obsws-scene-list', (data) => {
   const { responseData } = data
-  const { _currentPreviewSceneName, currentProgramSceneName, scenes } = responseData;
+  const { currentPreviewSceneName, currentProgramSceneName, scenes } = responseData;
   const sceneList = document.getElementById('selSceneList') as HTMLSelectElement;
 
   // implemented a "clear" function
@@ -137,6 +139,7 @@ vc.on('vc-result', (r: string[]) => {
   const backPattern = /(I'm back|I have arrived)/i
   const privacyPattern = /(privacy please|hide screen)/i;
   const githubPattern = /(check out my github|my personal github|my work github)/i
+  const speakPattern = /speak the following (.*)/i
 
   const patterns = [brbPattern, backPattern, privacyPattern, githubPattern];
 
@@ -149,7 +152,9 @@ vc.on('vc-result', (r: string[]) => {
     render('SCREEN IS HIDDEN FOR PRIVACY REASONS, THANK YOU FOR YOUR PATIENCE');
     obsws.setSceneItemEnabled('Screens', +privacySource, true);
   } else if (backPattern.test(caption)) {
-    obsws.setCurrentProgramSceneByUuid(lastScene.sceneUuid);
+    if (lastScene) {
+      obsws.setCurrentProgramSceneByUuid(lastScene.sceneUuid);
+    }
     obsws.setSceneItemEnabled('Screens', +privacySource, false);
   } else if (githubPattern.test(caption)) {
     const matches = caption.match(githubPattern);
@@ -165,7 +170,12 @@ vc.on('vc-result', (r: string[]) => {
     } else {
       chat.sendChannelMessage('#fallenlearns', 'Check out my github! https://github.com/afallenhope or https://github.com/pierrecdevs');
     }
-  } else {
+  } else if (speakPattern.test(caption)) {
+    const matches = caption.match(speakPattern);
+    tts.speak(`My boss told me to say: ${matches![1]}`);
+  }
+
+  else {
     render(caption);
     obsws.sendCaption(caption.trim());
   }
