@@ -5,19 +5,21 @@ export interface IrcEvents {
   'irc-data': [MessageEvent];
   'irc-error': [Event];
   'irc-close': [CloseEvent];
-  'irc-ping': [any];
   // CUSTOM EVENTS
   'irc-motd': [MessageEvent];
-  'irc-message': [MessageEvent];
+  'irc-message': [{ nick: string, channel: string, message: string }];
+  'irc-channel-join': [{ nick: string, channel: string }];
+  'irc-ping': [{ pong: string }];
 }
 
 const CHAT_URL = 'wss://irc-ws.chat.twitch.tv:443';
 
 class IrcLite extends EventSystem<IrcEvents> {
   private ws!: WebSocket;
-  protected nick: string = '';
-  protected name: string = '';
+  protected username: string = '';
+  protected realname: string = '';
   protected hostname: string = '';
+  protected servername: string = '';
   protected password: string = '';
 
   constructor() {
@@ -25,15 +27,16 @@ class IrcLite extends EventSystem<IrcEvents> {
   }
 
   connect(
-    nick: string,
-    name: string = '',
+    username: string,
+    realname: string = '',
     hostname: string = '',
     password: string = '',
   ) {
-    this.nick = nick;
-    this.name = name ?? nick;
-    this.hostname = hostname ?? `${nick}@${nick}`;
+    this.username = username;
+    this.realname = realname ?? username;
+    this.hostname = hostname ?? `${username}@${username}`;
     this.password = password ?? '';
+
     this.ws = new WebSocket(CHAT_URL);
     this.ws.onopen = this.onOpen.bind(this);
     this.ws.onclose = this.onClose.bind(this);
@@ -41,10 +44,10 @@ class IrcLite extends EventSystem<IrcEvents> {
     this.ws.onmessage = this.onMessage.bind(this);
   }
 
-  setNick(nick: string) {
+  setNick(newUsername: string) {
     try {
-      this.nick = nick;
-      this.ws.send(`NICK ${nick}\r\n`);
+      this.username = newUsername;
+      this.ws.send(`NICK ${this.username}\r\n`);
     } catch (ex) {
       console.warn('setNick failed', ex);
     }
@@ -61,7 +64,9 @@ class IrcLite extends EventSystem<IrcEvents> {
   sendCAP(capability: string) {
     try {
       this.ws.send(`CAP REQ :${capability}\r\n`);
-    } catch (ex) { }
+    } catch (ex) {
+      console.warn('sendCAP failed', ex);
+    }
   }
 
   joinChannel(channel: string) {
@@ -81,35 +86,55 @@ class IrcLite extends EventSystem<IrcEvents> {
     }
   }
 
-  ping(pong: string) {
+  sendPing(pong: string) {
     try {
       this.ws.send(`PING :${pong}\r\n`);
-    } catch (ex) { }
+    } catch (ex) {
+      console.warn('sendPing failed', ex);
+    }
   }
 
-  pong(ping: string) {
+  sendPong(ping: string) {
     try {
       this.ws.send(`PONG :${ping}\r\n`);
       console.log('Sending PONG', ping);
-    } catch (ex) { }
+    } catch (ex) {
+      console.warn('sendPong failed', ex);
+    }
   }
 
-  /** Events */
-  onOpen(e: Event) {
+  sendQuit(message: string = 'IRCLite') {
     try {
-      this.emit('irc-connected', e);
+      this.ws.send(`QUIT :${message}\r\n`);
+    } catch (ex) {
+      console.warn('sendQuit failed', ex);
+    }
+  }
+
+  // --- Events --- //
+  onOpen(e: Event) {
+    let command = '';
+    try {
 
       if (this.password.trim()) {
-        this.ws.send(`PASS ${this.password}\r\n`);
+        command = `PASS ${this.password}\r\n`;
+        this.ws.send(command);
       }
 
-      this.ws.send(`NICK ${this.nick}\r\n`);
+      command = `NICK ${this.username}\r\n`
+      this.ws.send(command);
+
+      command = `USER ${this.username} ${this.hostname} ${this.username} ${this.realname}\r\n`
+      this.ws.send(command)
 
 
+      this.emit('irc-connected', e);
       // TODO: look into possibly clearing the password
       // will comment now in case we want a "reconnect" option.
       // this.password = null;
-    } catch (ex) { }
+    } catch (ex) {
+      console.warn('Initial Connection failed. Last Command Sent', command);
+    }
   }
 
   onClose(e: CloseEvent) {
@@ -121,12 +146,38 @@ class IrcLite extends EventSystem<IrcEvents> {
   }
   onMessage(e: MessageEvent) {
     const data = e.data;
-    this.emit('irc-data', data);
+    const payloadPtrn = /:(?<nick>[^!]+)!(?<user>[^@]+)@(?<host>[^\s]+)\s(?<command>[^\s]+)\s(?<channel>[^\s]*)\s?:?(?<message>.*)/
 
-    if (data.substr(0, 4).toUpperCase() === 'PING') {
-      this.pong(data.substr(6));
+    const match = data.match(payloadPtrn);
+
+
+    const {
+      nick = null,
+      user = null,
+      host = null,
+      command = null,
+      channel = null,
+      message = null,
+    } = match?.groups || {};
+
+
+    if ('PING' === data.substring(0, 4)) {
+      const pong = data.substring(6);
+      this.sendPong(pong);
+      this.emit('irc-ping', pong);
+    } else if (!command) {
+      this.emit('irc-data', data);
+    } else {
+      switch (command) {
+        case 'PRIVMSG':
+          this.emit('irc-message', { nick, channel, message });
+          break;
+        case 'JOIN':
+          this.emit('irc-channel-join', { nick, channel });
+      }
+      console.log('payloadMatches', data.match(payloadPtrn));
     }
-    console.log('IRCDATA', data);
+
   }
 }
 
