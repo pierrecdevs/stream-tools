@@ -1,8 +1,8 @@
 import EventSystem from './event-system';
 
 interface VoiceCaptioningEvents {
-  'vc-start': [];
-  'vc-end': [];
+  'vc-start': [Event];
+  'vc-end': [Event];
   'vc-error': [SpeechRecognitionErrorEvent];
   'vc-result': [string[]];
 }
@@ -39,26 +39,21 @@ class VoiceCaptioning extends EventSystem<VoiceCaptioningEvents> {
   // overridable
   // Internal Events
   onStart(event: Event) {
-    console.log('OnStart', event);
-    this.emit('vc-start');
+    this.emit('vc-start', event);
   }
 
   onEnd(event: Event) {
     if (this.isTranscribing) {
-      console.log('OnEnd restarting...');
       this.speechRecognition?.start();
     }
-    this.emit('vc-end');
-    console.log('OnEnd', event);
+    this.emit('vc-end', event);
   }
 
   onError(event: SpeechRecognitionErrorEvent) {
     this.emit('vc-error', event)
-    console.log('OnError', event);
   }
 
   onResult(event: SpeechRecognitionEvent) {
-    console.log('OnResult', event);
 
     const transcripts: string[] = [];
     for (let i = event.resultIndex; i < event.results.length; ++i) {
