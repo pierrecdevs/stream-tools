@@ -1,4 +1,4 @@
-import EventSystem from "./event-system";
+import EventSystem from './event-system';
 
 
 interface TTSEvents {
@@ -82,7 +82,9 @@ class TTS extends EventSystem<TTSEvents> {
   }
 
   onError(event: SpeechSynthesisErrorEvent) {
+    this.isSpeaking = false;
     this.emit('tts-error', event);
+    this.processQueue();
   }
 
   onPause(event: SpeechSynthesisEvent) {
