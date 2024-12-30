@@ -12,6 +12,9 @@ interface TTSEvents {
 class TTS extends EventSystem<TTSEvents> {
   private tts!: SpeechSynthesis;
   private utterance!: SpeechSynthesisUtterance;
+  private speechQueue: Set<string> = new Set();
+  private isSpeaking: boolean = false;
+
   constructor() {
     super();
 
@@ -31,20 +34,40 @@ class TTS extends EventSystem<TTSEvents> {
         throw new Error('Your browser does not support TTS');
       }
 
-      if (!this.tts.speaking) {
-        this.utterance.text = text
-        this.tts.speak(this.utterance);
+      if (!this.speechQueue.has(text)) {
+        this.speechQueue.add(text)
       }
 
-
+      if (!this.isSpeaking) {
+        this.processQueue();
+      }
     } catch (ex) {
       const error = ex as Error
       throw new Error(`speak failed: ${error.message}`);
     }
   }
 
-  stop() {
+  private processQueue() {
+    if (this.speechQueue.size === 0) {
+      this.isSpeaking = false;
+      return;
+    }
 
+    const nextText = Array.from(this.speechQueue).shift()!;
+    this.speechQueue.delete(nextText);
+
+    this.utterance.text = nextText;
+    this.isSpeaking = true;
+    this.tts.speak(this.utterance);
+  }
+
+  stop() {
+    if (this.tts.speaking) {
+      this.tts.cancel();
+    }
+
+    this.speechQueue.clear();
+    this.isSpeaking = false;
   }
 
   // --- Events --
@@ -53,7 +76,9 @@ class TTS extends EventSystem<TTSEvents> {
   }
 
   onEnd(event: SpeechSynthesisEvent) {
+    this.isSpeaking = false;
     this.emit('tts-end', event);
+    this.processQueue();
   }
 
   onError(event: SpeechSynthesisErrorEvent) {

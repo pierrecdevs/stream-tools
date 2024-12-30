@@ -39,6 +39,7 @@ obsws.on('obsws-auth-required', (data: any) => {
 
 obsws.on('obsws-authenticated', () => {
   render('Authenticated. Start caption service');
+  tts.speak('Authenticated and ready to go.');
   enableControls();
   const username = import.meta.env.VITE_TWITCH_USERNAME.toLowerCase();
   const pass = import.meta.env.VITE_TWITCH_OAUTH_TOKEN;
@@ -99,6 +100,7 @@ chat.on('irc-connected', (e) => {
   console.log('IRC Connected', e);
   chat.sendCAP('twitch.tv/membership twitch.tv/tags twitch.tv/commands');
   chat.joinChannel('#fallenlearns');
+  tts.speak('Connected to #FallenLearns');
 });
 
 chat.on('irc-data', (e) => {
