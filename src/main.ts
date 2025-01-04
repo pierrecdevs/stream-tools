@@ -4,10 +4,11 @@ import OBSWebSocket from './lib/obs-ws';
 import SceneItem from './interfaces/SceneItem';
 import IrcLite from './lib/irc-lite';
 import TTS from './lib/tts';
+import CommandParser from './lib/command-parser';
 
 // Entrypoint
 // @description wrapper function that returns all the objects
-// @returns [OBSWebSocket, VoiceCaptioning]
+// @returns [OBSWebSocket, VoiceCaptioning, TTS, IrcLite]
 const main = (): [OBSWebSocket, VoiceCaptioning, TTS, IrcLite] => {
   return [
     new OBSWebSocket(),
@@ -17,10 +18,17 @@ const main = (): [OBSWebSocket, VoiceCaptioning, TTS, IrcLite] => {
   ];
 };
 
-
+const commandParser = new CommandParser();
 const [obsws, vc, tts, chat]: [OBSWebSocket, VoiceCaptioning, TTS, IrcLite] = main();
 let lastScene: SceneItem | null = null;
 let privacySource: number | string = '';
+
+try {
+  commandParser.load('commands.json');
+} catch (ex) {
+  tts.speak('Your stuff is broken, could not load commands dot jason');
+}
+
 
 obsws.on('obsws-open', (m: any) => {
   console.log('open', m);
@@ -39,7 +47,7 @@ obsws.on('obsws-auth-required', (data: any) => {
 
 obsws.on('obsws-authenticated', () => {
   render('Authenticated. Start caption service');
-  tts.speak('Authenticated and ready to go.');
+  //tts.speak('Authenticated and ready to go.');
   enableControls();
   const username = import.meta.env.VITE_TWITCH_USERNAME.toLowerCase();
   const pass = import.meta.env.VITE_TWITCH_OAUTH_TOKEN;
@@ -100,7 +108,7 @@ chat.on('irc-connected', (e) => {
   console.log('IRC Connected', e);
   chat.sendCAP('twitch.tv/membership twitch.tv/tags twitch.tv/commands');
   chat.joinChannel('#fallenlearns');
-  tts.speak('Connected to #FallenLearns');
+  //tts.speak('Connected to #FallenLearns');
 });
 
 chat.on('irc-data', (e) => {
@@ -140,10 +148,9 @@ vc.on('vc-result', (r: string[]) => {
   const brbPattern = /(be right back|I'll be back)/i;
   const backPattern = /(I'm back|I have arrived)/i
   const privacyPattern = /(privacy please|hide screen)/i;
-  const githubPattern = /(check out my github|my personal github|my work github)/i
-  const speakPattern = /speak the following (.*)/i
+  //const speakPattern = /(speak the following|relay the following)(.+)/i
 
-  const patterns = [brbPattern, backPattern, privacyPattern, githubPattern];
+  const patterns = [brbPattern, backPattern, privacyPattern];
 
   const found = patterns.filter(f => f.test(caption));
   if (found.length > 0) console.log('FOUND', found);
@@ -158,26 +165,40 @@ vc.on('vc-result', (r: string[]) => {
       obsws.setCurrentProgramSceneByUuid(lastScene.sceneUuid);
     }
     obsws.setSceneItemEnabled('Screens', +privacySource, false);
-  } else if (githubPattern.test(caption)) {
-    const matches = caption.match(githubPattern);
-    const match = matches![1];
-    if (match.includes('personal')) {
-      chat.sendChannelMessage(
-        '#fallenlearns',
-        'Check out my personal GitHub! https://github.com/afallenhope'
-      );
-    } else if (match.includes('work')) {
-      chat.sendChannelMessage('#fallenlearns', 'Check out my work GitHub https://github.com/pierrecdevs');
-
-    } else {
-      chat.sendChannelMessage('#fallenlearns', 'Check out my github! https://github.com/afallenhope or https://github.com/pierrecdevs');
-    }
-  } else if (speakPattern.test(caption)) {
-    const matches = caption.match(speakPattern);
-    tts.speak(`My boss told me to say: ${matches![1]}`);
+    //} else if (speakPattern.test(caption)) {
+    //  const matches = caption.match(speakPattern);
+    //  tts.speak(`${matches![2]}`);
   }
 
   else {
+
+    if (!caption) {
+      return;
+    }
+
+    //const f = commandParser.find(caption);
+    //
+    //if (f && f.response) {
+    //  if ('chat' === f.action) {
+    //    chat.sendChannelMessage('#fallenlearns', f.response);
+    //  } else if ('speak' === f.action) {
+    //    tts.speak(f.response);
+    //  }
+    //}
+    const foundCommand = commandParser.parseCommand(caption);
+    if (foundCommand !== null) {
+      switch (foundCommand.action) {
+        case 'speak':
+          tts.speak(foundCommand.response);
+          break;
+        case 'chat':
+          chat.sendChannelMessage('#fallenlearns', foundCommand.response);
+          break;
+        default:
+          console.log('Unknown Action', foundCommand.action);
+      }
+    }
+
     render(caption);
     obsws.sendCaption(caption.trim());
   }
@@ -212,8 +233,13 @@ const stopCaptioning = () => {
   btnStartCaptioning?.removeAttribute('disabled');
 
   vc.stop();
-};
+}
 
+/**
+ * @name populateSceneList()
+ * @method
+ * @description Function to use OBSWS and get the scenes
+ */
 const populateSceneList = () => {
   obsws.getSceneList();
 };
@@ -262,7 +288,6 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <div class="card">
       <h2 id="caption"></h2>
     </div>
-
   </div>
 `
 
