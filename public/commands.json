@@ -1,0 +1,34 @@
+{
+  "commands": [
+    {
+      "pattern": "(check out my work github)",
+      "response": "Check out my work GitHub https://github.com/pierrecdevs",
+      "action": "chat"
+    },
+    {
+      "pattern": "(check out my personal github)",
+      "response": "Check out my personal GitHub https://github.com/afallenhope",
+      "action": "chat"
+    },
+    {
+      "pattern": "(check out my github)",
+      "response": "Check out my GitHubs personal: https://github.com/afallenhope or work: https://github.com/pierrecdevs",
+      "action": "chat"
+    },
+    {
+      "pattern": "([^ +]+) is cute",
+      "response": "Yeah they are ^-^. $1 is super cute",
+      "action": "chat"
+    },
+    {
+      "pattern": "hello ([^ +])",
+      "response": "Bonjour $1",
+      "action": "speak"
+    },
+    {
+      "pattern": "(speak the following|relay the following)(.+)",
+      "response": "$2",
+      "action": "speak"
+    }
+  ]
+}
