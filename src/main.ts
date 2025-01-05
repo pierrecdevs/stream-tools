@@ -145,63 +145,57 @@ vc.on('vc-start', () => {
 vc.on('vc-result', (r: string[]) => {
   const caption = r.join('\n');
 
-  const brbPattern = /(be right back|I'll be back)/i;
-  const backPattern = /(I'm back|I have arrived)/i
-  const privacyPattern = /(privacy please|hide screen)/i;
-  //const speakPattern = /(speak the following|relay the following)(.+)/i
-
-  const patterns = [brbPattern, backPattern, privacyPattern];
-
-  const found = patterns.filter(f => f.test(caption));
-  if (found.length > 0) console.log('FOUND', found);
-
-  if (brbPattern.test(caption)) {
-    obsws.setCurrentProgramSceneByName('scene.brb');
-  } else if (privacyPattern.test(caption)) {
-    render('SCREEN IS HIDDEN FOR PRIVACY REASONS, THANK YOU FOR YOUR PATIENCE');
-    obsws.setSceneItemEnabled('Screens', +privacySource, true);
-  } else if (backPattern.test(caption)) {
-    if (lastScene) {
-      obsws.setCurrentProgramSceneByUuid(lastScene.sceneUuid);
-    }
-    obsws.setSceneItemEnabled('Screens', +privacySource, false);
-    //} else if (speakPattern.test(caption)) {
-    //  const matches = caption.match(speakPattern);
-    //  tts.speak(`${matches![2]}`);
+  if (!caption) {
+    return;
   }
 
-  else {
+  const foundCommand = commandParser.parseCommand(
+    caption,
+    [
+      '$privacySource',
+      '$lastSceneUuid',
+      '$true',
+      '$false',
+    ],
+    [
 
-    if (!caption) {
-      return;
-    }
+      privacySource,
+      lastScene?.sceneUuid,
+      true,
+      false
+    ]
+  );
 
-    //const f = commandParser.find(caption);
-    //
-    //if (f && f.response) {
-    //  if ('chat' === f.action) {
-    //    chat.sendChannelMessage('#fallenlearns', f.response);
-    //  } else if ('speak' === f.action) {
-    //    tts.speak(f.response);
-    //  }
-    //}
-    const foundCommand = commandParser.parseCommand(caption);
-    if (foundCommand !== null) {
-      switch (foundCommand.action) {
-        case 'speak':
-          tts.speak(foundCommand.response);
-          break;
-        case 'chat':
-          chat.sendChannelMessage('#fallenlearns', foundCommand.response);
-          break;
-        default:
-          console.log('Unknown Action', foundCommand.action);
+
+  render(caption);
+  obsws.sendCaption(caption.trim());
+
+  if (null === foundCommand) {
+    return;
+  }
+
+  switch (foundCommand.action) {
+    case 'speak':
+      tts.speak(foundCommand.response);
+      break;
+    case 'chat':
+      chat.sendChannelMessage('#fallenlearns', foundCommand.response);
+      break;
+    case 'obs':
+      try {
+        const { command, args } = foundCommand;
+        if (command && typeof obsws[command] === 'function') {
+          obsws[command](...args);
+        }
+      } catch (ex) {
+        const error = ex as Error;
+        console.warn(`Error parsing OBS command`, ex.message);
       }
-    }
-
-    render(caption);
-    obsws.sendCaption(caption.trim());
+      break;
+    default:
+      console.log('Unknown Action', foundCommand.action);
   }
+
 });
 
 
@@ -271,6 +265,7 @@ const render = (message: string) => {
 };
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
+<div id="controls">
   <div class="card">
     <button id="btnGetSceneList" class="btn btn-primary" disabled="disabled">Get Scene List</button>
     <div class="selectdiv">
@@ -280,14 +275,16 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         </select>
       </label>
     </div>
-</div>
-  <div>
+  </div>
+  <div class="card">
     <button id="btnStartCaptioning" class="btn btn-success" disabled=disabled>Start Captioning</button>
     <button id="btnStopCaptioning" class="btn btn-error" disabled="disabled">Stop</button>
-
-    <div class="card">
-      <h2 id="caption"></h2>
-    </div>
   </div>
+</div>
+<div id="captionator">
+  <div class="card">
+    <h2 id="caption"></h2>
+  </div>
+</div>
 `
 
