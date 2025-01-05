@@ -1,9 +1,6 @@
 import { Command } from '../interfaces/Command';
+import { CommandResult } from '../interfaces/CommandResult';
 
-interface CommandResult {
-  response: string;
-  action: string;
-}
 
 class CommandParser {
   private commands: Command[] = [];
@@ -25,17 +22,39 @@ class CommandParser {
     }
   }
 
-  parseCommand(input: string): CommandResult | null {
-    for (const { pattern, response, action } of this.commands) {
+  parseCommand(input: string, patterns: string[] = [], replacements: any[] = []): CommandResult | null {
+    for (const { pattern, response, action, argTypes } of this.commands) {
       const regex = new RegExp(pattern, 'i');
       const match = input.match(regex);
 
       if (match) {
-        const processedResponse = response?.replace(/\$(\d+)/g, (_, groupIndex: string) => {
+        let processedResponse = response;
+
+        processedResponse = processedResponse?.replace(/\$(\d+)/g, (_, groupIndex: string) => {
           return match[+groupIndex] || '';
         });
 
-        return { response: processedResponse, action };
+        patterns.forEach((placeholder, index) => {
+          const replacement = replacements[index] ?? '';
+          processedResponse = processedResponse.replace(placeholder, replacement);
+        });
+
+        const [command, ...args] = processedResponse.split(/\s+/);
+
+        const formattedArgs = args.map((arg, index) => {
+          const type = argTypes?.[index] || 'string';
+
+          switch (type) {
+            case 'number':
+              return parseFloat(arg);
+            case 'boolean':
+              return arg.toLowerCase() === 'true';
+            default:
+              return arg;
+          }
+
+        });
+        return { response: processedResponse, action, command, args: formattedArgs };
       }
     }
 

@@ -1,27 +1,27 @@
 {
   "commands": [
     {
-      "pattern": "(check out my work github)",
+      "pattern": "check out my work github",
       "response": "Check out my work GitHub https://github.com/pierrecdevs",
       "action": "chat"
     },
     {
-      "pattern": "(check out my personal github)",
+      "pattern": "check out my personal github",
       "response": "Check out my personal GitHub https://github.com/afallenhope",
       "action": "chat"
     },
     {
-      "pattern": "(check out my github)",
+      "pattern": "check out my github",
       "response": "Check out my GitHubs personal: https://github.com/afallenhope or work: https://github.com/pierrecdevs",
       "action": "chat"
     },
     {
-      "pattern": "([^ +]+) is cute",
+      "pattern": "([^ ]+) is cute",
       "response": "Yeah they are ^-^. $1 is super cute",
       "action": "chat"
     },
     {
-      "pattern": "hello ([^ +])",
+      "pattern": "hello ([^ ]+)",
       "response": "Bonjour $1",
       "action": "speak"
     },
@@ -29,6 +29,39 @@
       "pattern": "(speak the following|relay the following)(.+)",
       "response": "$2",
       "action": "speak"
+    },
+    {
+      "pattern": "be right back|i'll be back",
+      "response": "setCurrentProgramSceneByName scene.brb",
+      "action": "obs"
+    },
+    {
+      "pattern": "give me privacy",
+      "response": "setSceneItemEnabled Screens $privacySource $true",
+      "action": "obs",
+      "argTypes": [
+        "string",
+        "number",
+        "boolean"
+      ]
+    },
+    {
+      "pattern": "show my screen",
+      "response": "setSceneItemEnabled Screens $privacySource $false",
+      "action": "obs",
+      "argTypes": [
+        "string",
+        "number",
+        "boolean"
+      ]
+    },
+    {
+      "pattern": "(I'm back)",
+      "response": "setCurrentProgramSceneByUuid $lastSceneUuid",
+      "action": "obs",
+      "argTypes": [
+        "string"
+      ]
     }
   ]
 }
