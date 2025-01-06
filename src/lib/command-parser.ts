@@ -60,28 +60,6 @@ class CommandParser {
 
     return null;
   }
-
-  find(trigger: string): Command | undefined {
-    try {
-      trigger = trigger.replace(',', ' ').replace('.', ' ');
-      let finalCmd = undefined;
-      const foundCommand = this
-        .commands
-        .find((c): Command => new RegExp(c.pattern, 'i').test(trigger));
-
-      if (foundCommand) {
-        foundCommand.params = null;
-        const matches = trigger.match(new RegExp(foundCommand.pattern, 'i'));
-        finalCmd = foundCommand;
-        finalCmd.response = foundCommand.response?.replace('$params$', matches![2]);
-      }
-
-      return finalCmd;
-    } catch (ex) {
-      const error = ex as Error;
-      throw new Error(`find failed: ${error.message}`);
-    }
-  }
 }
 
 export default CommandParser;
