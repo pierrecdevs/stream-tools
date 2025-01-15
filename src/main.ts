@@ -7,7 +7,7 @@ import TTS from './lib/tts';
 import CommandParser from './lib/command-parser';
 import LifxClient from './lib/lifx-client';
 import { LifxBulbState } from './interfaces/LifxBulb';
-import LLMResponder from './lib/llm-responder';
+import OllamaClient, { OllamaRole } from './lib/ollama-client';
 
 // Entrypoint
 // @description wrapper function that returns all the objects
@@ -213,12 +213,16 @@ vc.on('vc-result', async (r: string[]) => {
       break;
     case 'ai':
       try {
-        const r = await LLMResponder.generate(foundCommand.response);
+        //const r = await OllamaClient.generate(foundCommand.response);
+        const r = await OllamaClient.chat(
+          OllamaRole.User,
+          foundCommand.response,
+        );
         if (r instanceof Error) {
           return;
         }
 
-        tts.speak(r.response);
+        tts.speak(r.message.content);
       } catch (ex: unknown) {
         const error = ex as Error;
         console.warn(`Error parsing AI response`, error.message);
