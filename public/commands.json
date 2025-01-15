@@ -62,6 +62,16 @@
       "argTypes": [
         "string"
       ]
+    },
+    {
+      "pattern": "(AI prompt)(.+)",
+      "response": "$2",
+      "action": "ai"
+    },
+    {
+      "pattern": "tts stop",
+      "response": "<stop>",
+      "action": "speak"
     }
   ]
 }
