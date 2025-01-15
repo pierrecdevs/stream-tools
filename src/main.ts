@@ -5,21 +5,25 @@ import SceneItem from './interfaces/SceneItem';
 import IrcLite from './lib/irc-lite';
 import TTS from './lib/tts';
 import CommandParser from './lib/command-parser';
+import LifxClient from './lib/lifx-client';
+import { LifxBulbState } from './interfaces/LifxBulb';
+import LLMResponder from './lib/llm-responder';
 
 // Entrypoint
 // @description wrapper function that returns all the objects
 // @returns [OBSWebSocket, VoiceCaptioning, TTS, IrcLite]
-const main = (): [OBSWebSocket, VoiceCaptioning, TTS, IrcLite] => {
+const main = (): [OBSWebSocket, VoiceCaptioning, TTS, LifxClient, IrcLite] => {
   return [
     new OBSWebSocket(),
     new VoiceCaptioning(),
     new TTS(),
+    new LifxClient(import.meta.env.VITE_LIFX_OAUTH_TOKEN),
     new IrcLite(),
   ];
 };
 
 const commandParser = new CommandParser();
-const [obsws, vc, tts, chat]: [OBSWebSocket, VoiceCaptioning, TTS, IrcLite] = main();
+const [obsws, vc, tts, lifx, chat]: [OBSWebSocket, VoiceCaptioning, TTS, LifxClient, IrcLite] = main();
 let lastScene: SceneItem | null = null;
 let privacySource: number | string = '';
 
@@ -45,10 +49,20 @@ obsws.on('obsws-auth-required', (data: any) => {
   obsws.authenticate(password, challenge, salt);
 });
 
-obsws.on('obsws-authenticated', () => {
+obsws.on('obsws-authenticated', async () => {
   render('Authenticated. Start caption service');
   //tts.speak('Authenticated and ready to go.');
+  const light = await lifx.randomLight();
+
+  if (light) {
+    lifx.setState(light, {
+      power: 'on',
+      color: lifx.randomColor(),
+    } as LifxBulbState);
+    console.log(light);
+  }
   enableControls();
+
   const username = import.meta.env.VITE_TWITCH_USERNAME.toLowerCase();
   const pass = import.meta.env.VITE_TWITCH_OAUTH_TOKEN;
   const hostname = `${username}.tmi.twitch.tv`;
@@ -74,7 +88,7 @@ obsws.on('obsws-scene-list', (data) => {
     sceneList.options.remove(0);
   } while (sceneList.options.length > 0);
 
-  for (let scene: SceneItem of scenes) {
+  for (let scene of scenes) {
     sceneList.options.add(new Option(scene.sceneName, scene.sceneUuid));
     if (scene.sceneName.toLowerCase() === currentProgramSceneName.toLowerCase()) {
       console.log('Current Program Scene', scene);
@@ -107,7 +121,7 @@ obsws.on('obsws-scene-item-id', (e: any) => {
 chat.on('irc-connected', (e) => {
   console.log('IRC Connected', e);
   chat.sendCAP('twitch.tv/membership twitch.tv/tags twitch.tv/commands');
-  chat.joinChannel('#fallenlearns');
+  chat.joinChannel(`#${import.meta.env.VITE_TWITCH_USERNAME}`);
   //tts.speak('Connected to #FallenLearns');
 });
 
@@ -142,7 +156,7 @@ vc.on('vc-start', () => {
   console.log('vc has started');
 })
 
-vc.on('vc-result', (r: string[]) => {
+vc.on('vc-result', async (r: string[]) => {
   const caption = r.join('\n');
 
   if (!caption) {
@@ -176,10 +190,15 @@ vc.on('vc-result', (r: string[]) => {
 
   switch (foundCommand.action) {
     case 'speak':
+      if ('<stop>' === foundCommand.response.trim()) {
+        tts.stop();
+        return;
+      }
+
       tts.speak(foundCommand.response);
       break;
     case 'chat':
-      chat.sendChannelMessage('#fallenlearns', foundCommand.response);
+      chat.sendChannelMessage(`#${import.meta.env.VITE_TWITCH_USERNAME}`, foundCommand.response);
       break;
     case 'obs':
       try {
@@ -187,15 +206,27 @@ vc.on('vc-result', (r: string[]) => {
         if (command && typeof obsws[command] === 'function') {
           obsws[command](...args);
         }
-      } catch (ex) {
+      } catch (ex: unknown) {
         const error = ex as Error;
-        console.warn(`Error parsing OBS command`, ex.message);
+        console.warn(`Error parsing OBS command`, error.message);
+      }
+      break;
+    case 'ai':
+      try {
+        const r = await LLMResponder.generate(foundCommand.response);
+        if (r instanceof Error) {
+          return;
+        }
+
+        tts.speak(r.response);
+      } catch (ex: unknown) {
+        const error = ex as Error;
+        console.warn(`Error parsing AI response`, error.message);
       }
       break;
     default:
       console.log('Unknown Action', foundCommand.action);
   }
-
 });
 
 

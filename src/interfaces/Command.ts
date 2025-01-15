@@ -1,6 +1,10 @@
+import Action from '../enums/action-enum';
+import ArgType from '../enums/arg-type';
+
 export interface Command {
   pattern: RegExp;
   response: string;
-  action: 'chat' | 'speak' | 'obs';
-  argTypes?: ('string' | 'number' | 'boolean')[];
+  action: Action;
+  //argTypes?: ('string' | 'number' | 'boolean')[];
+  argTypes?: ArgType[];
 }
