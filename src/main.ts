@@ -12,8 +12,9 @@ import OllamaClient, { OllamaRole } from './lib/ollama-client';
 // Entrypoint
 // @description wrapper function that returns all the objects
 // @returns [OBSWebSocket, VoiceCaptioning, TTS, IrcLite]
-const main = (): [OBSWebSocket, VoiceCaptioning, TTS, LifxClient, IrcLite] => {
+const main = (): [CommandParser, OBSWebSocket, VoiceCaptioning, TTS, LifxClient, IrcLite] => {
   return [
+    new CommandParser(),
     new OBSWebSocket(),
     new VoiceCaptioning(),
     new TTS(),
@@ -22,10 +23,24 @@ const main = (): [OBSWebSocket, VoiceCaptioning, TTS, LifxClient, IrcLite] => {
   ];
 };
 
-const commandParser = new CommandParser();
-const [obsws, vc, tts, lifx, chat]: [OBSWebSocket, VoiceCaptioning, TTS, LifxClient, IrcLite] = main();
+const [
+  commandParser,
+  obsws,
+  vc,
+  tts,
+  lifx,
+  chat]: [
+    CommandParser,
+    OBSWebSocket,
+    VoiceCaptioning,
+    TTS,
+    LifxClient,
+    IrcLite] = main();
+
 let lastScene: SceneItem | null = null;
 let privacySource: number | string = '';
+let reconnectTimer: number | NodeJS.Timeout;
+
 
 try {
   commandParser.load('commands.json');
@@ -75,7 +90,14 @@ obsws.on('obsws-authenticated', async () => {
 });
 
 obsws.on('obsws-error', (e) => {
+  if (reconnectTimer > 0) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(() => {
+      obsws.connect(`ws://${import.meta.env.VITE_OBS_WEBSOCKET_HOST}:${import.meta.env.VITE_OBS_WEBSOCKET_PORT}`)
+    }, 3000);
+  }
   render(`Error connecting to WS: ${JSON.stringify(e)}`);
+
 });
 
 obsws.on('obsws-scene-list', (data) => {
@@ -213,10 +235,15 @@ vc.on('vc-result', async (r: string[]) => {
       break;
     case 'ai':
       try {
+        const selModelList: HTMLSelectElement | null = document.getElementById('selModelList')
+
         //const r = await OllamaClient.generate(foundCommand.response);
+        const model = selModelList && selModelList.selectedIndex > -1 ? selModelList.options[selModelList.selectedIndex].value.trim() : 'llama3.2'
         const r = await OllamaClient.chat(
           OllamaRole.User,
           foundCommand.response,
+          //'llama3.2'
+
         );
         if (r instanceof Error) {
           return;
@@ -262,6 +289,48 @@ const stopCaptioning = () => {
   btnStartCaptioning?.removeAttribute('disabled');
 
   vc.stop();
+};
+
+/**
+ * @async
+ * @name askAI()
+ * @method
+ * @description Function to call our local LLAMA
+ */
+const askAI = async () => {
+  const prompt: HTMLTextAreaElement = document.getElementById('prompt');
+  const out: HTMLDivElement = document.getElementById('ai-out');
+  const selModelList: HTMLSelectElement = document.getElementById('selModelList');
+
+  try {
+    const model = selModelList?.options[selModelList?.options.selectedIndex].value;
+    const r = await OllamaClient.chat(
+      OllamaRole.User,
+      prompt.value.trim(),
+      //'llama3.2'
+      model,
+    );
+    if (r instanceof Error) {
+      return;
+    }
+
+    out!.textContent = r.message.content;
+  } catch (ex: unknown) {
+    const error = ex as Error;
+    console.warn(`Error parsing AI response`, error.message);
+  }
+};
+
+/**
+ * @name resetPrompt()
+ * @method
+ * @description Function to reset the textarea and AI prompt response
+ */
+const resetPrompt = () => {
+  const prompt: HTMLTextAreaElement = document.getElementById('prompt');
+  const out: HTMLDivElement = document.getElementById('ai-out');
+  out.textContent = '';
+  prompt.value = '';
 }
 
 /**
@@ -274,6 +343,29 @@ const populateSceneList = () => {
 };
 
 /**
+ * @name populateModelList()
+ * @method
+ * @description Function to populate the LLAMA select box.
+ */
+const populateModelList = async () => {
+  const selModelList: HTMLSelectElement = document.getElementById('selModelList');
+
+  try {
+    const { models } = await OllamaClient.getModels();
+
+    [...models].forEach((m) => {
+      selModelList.options.add(new Option(m.name, m.name));
+    });
+
+    if (selModelList.options.length > 0) {
+      selModelList.selectedIndex = 1;
+    }
+
+  } catch (ex: unknown) { }
+
+}
+
+/**
  * @name enableControls()
  * @method
  * @description Function to enable the 'Start Captioning' button
@@ -282,12 +374,21 @@ const enableControls = () => {
   const btnStartCaptioning = document.getElementById('btnStartCaptioning');
   const btnStopCaptioning = document.getElementById('btnStopCaptioning');
   const btnGetSceneList = document.getElementById('btnGetSceneList');
+  const btnAskAI = document.getElementById('btnAskAI');
+  const btnReset = document.getElementById('btnReset');
 
   btnStartCaptioning?.addEventListener('click', startCaptioning);
   btnStopCaptioning?.addEventListener('click', stopCaptioning);
   btnGetSceneList?.addEventListener('click', populateSceneList);
+  btnAskAI?.addEventListener('click', askAI);
+  btnReset?.addEventListener('click', resetPrompt);
+
   btnStartCaptioning?.removeAttribute('disabled');
   btnGetSceneList?.removeAttribute('disabled');
+  btnAskAI?.removeAttribute('disabled');
+  btnReset?.removeAttribute('disabled');
+
+  populateModelList();
 };
 
 /**
@@ -301,19 +402,41 @@ const render = (message: string) => {
 
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
 <div id="controls">
-  <div class="card">
-    <button id="btnGetSceneList" class="btn btn-primary" disabled="disabled">Get Scene List</button>
-    <div class="selectdiv">
-      <label for="selSceneList">
-        <select id="selSceneList">
-            <option disabled selected>Select a Scene</option>
-        </select>
-      </label>
+  <div class="row">
+    <div class="card">
+      <button id="btnGetSceneList" class="btn btn-primary" disabled="disabled">Get Scene List</button>
+      <div class="selectdiv">
+        <label for="selSceneList">
+          <select id="selSceneList">
+              <option disabled selected>Select a Scene</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="card">
+      <button id="btnStartCaptioning" class="btn btn-success" disabled=disabled>Start Captioning</button>
+      <button id="btnStopCaptioning" class="btn btn-error" disabled="disabled">Stop</button>
     </div>
   </div>
-  <div class="card">
-    <button id="btnStartCaptioning" class="btn btn-success" disabled=disabled>Start Captioning</button>
-    <button id="btnStopCaptioning" class="btn btn-error" disabled="disabled">Stop</button>
+  <div class="col">
+    <div class="card">
+        <h2>AI Prompt</h2>
+        <textarea id="prompt" cols="30" row="10" placeholder="Ask your question"></textarea> 
+        <div class="row">
+          <div class="selectdiv">
+            <label for="selModelList">
+              <select id="selModelList">
+                  <option disabled selected>Select a model</option>
+              </select>
+            </label>
+        </div>
+      </div>
+      <div class="row">
+          <button id="btnAskAI" class="btn btn-success" disabled=disabled>Ask AI</button>
+          <button id="btnReset" class="btn btn-error" disabled="disabled">Reset</button>
+      </div>
+      <div id="ai-out">results will be printed here...</div>
+    </div>
   </div>
 </div>
 <div id="captionator">
