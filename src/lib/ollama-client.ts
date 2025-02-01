@@ -59,7 +59,7 @@ class OllamaClient {
     }
   }
 
-  static async chat(role: OllamaRole, content: string, format: any = {}, model = 'llama3.2'): Promise<ChatResponse | Error> {
+  static async chat(role: OllamaRole, content: string, model = 'llama3.2'): Promise<ChatResponse | Error> {
     try {
       const payload = {
         model,
@@ -84,6 +84,25 @@ class OllamaClient {
         return Promise.reject(response);
       }
 
+    } catch (ex: unknown) {
+      return Promise.reject(ex);
+    }
+  }
+
+  static async getModels(): Promise<any | Error> {
+    try {
+      const response = await fetch(`${BASE_URL}/api/tags`, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json; charset="utf-8";',
+        },
+      });
+
+      if (response.ok) {
+        return await response.json();
+      } else {
+        return Promise.reject(response);
+      }
     } catch (ex: unknown) {
       return Promise.reject(ex);
     }
