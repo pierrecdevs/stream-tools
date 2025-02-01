@@ -44,7 +44,6 @@ h1 {
 #controls{
   display:flex;
   gap: 1rem;
-  align-items: start;
 }
 
 #captionator {
@@ -84,6 +83,21 @@ button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
 }
 
+textarea {
+  width: 25rem;
+  min-height:25rem;
+  height: auto;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+}
 
 .selectdiv:after {
   content: '<>';
