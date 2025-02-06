@@ -314,7 +314,7 @@ const askAI = async () => {
       return;
     }
 
-    out!.textContent = r.message.content;
+    out!.innerHTML = r.message.content.replace(/\r?\n/g, '<br>');
   } catch (ex: unknown) {
     const error = ex as Error;
     console.warn(`Error parsing AI response`, error.message);
