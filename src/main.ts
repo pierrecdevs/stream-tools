@@ -1,5 +1,5 @@
-import './style.css'
-import VoiceCaptioning from './lib/voice-captioning'
+import './style.css';
+import VoiceCaptioning from './lib/voice-captioning';
 import OBSWebSocket from './lib/obs-ws';
 import SceneItem from './interfaces/SceneItem';
 import IrcLite from './lib/irc-lite';
@@ -8,11 +8,20 @@ import CommandParser from './lib/command-parser';
 import LifxClient from './lib/lifx-client';
 import { LifxBulbState } from './interfaces/LifxBulb';
 import OllamaClient, { OllamaRole } from './lib/ollama-client';
+import SpotifyClient, { SpotifyConfig } from './lib/spotify-client';
 
 // Entrypoint
 // @description wrapper function that returns all the objects
 // @returns [OBSWebSocket, VoiceCaptioning, TTS, IrcLite]
-const main = (): [CommandParser, OBSWebSocket, VoiceCaptioning, TTS, LifxClient, IrcLite] => {
+const main = (): [
+  CommandParser,
+  OBSWebSocket,
+  VoiceCaptioning,
+  TTS,
+  LifxClient,
+  IrcLite,
+  SpotifyClient,
+] => {
   return [
     new CommandParser(),
     new OBSWebSocket(),
@@ -20,34 +29,37 @@ const main = (): [CommandParser, OBSWebSocket, VoiceCaptioning, TTS, LifxClient,
     new TTS(),
     new LifxClient(import.meta.env.VITE_LIFX_OAUTH_TOKEN),
     new IrcLite(),
+    new SpotifyClient({
+      client_id: import.meta.env.VITE_SPOTIFY_CLIENT_ID,
+      client_secret: import.meta.env.VITE_SPOTIFY_CLIENT_SECRET,
+      redirect_uri: import.meta.env.VITE_SPOTIFY_REDIRECT_URI,
+      oauth_token: import.meta.env.VITE_SPOTIFY_TOKEN,
+      scope: import.meta.env.VITE_SPOTIFY_SCOPE,
+      base_url: 'https://api.spotify.com',
+      version: 'v1',
+    } as SpotifyConfig),
   ];
 };
 
-const [
-  commandParser,
-  obsws,
-  vc,
-  tts,
-  lifx,
-  chat]: [
-    CommandParser,
-    OBSWebSocket,
-    VoiceCaptioning,
-    TTS,
-    LifxClient,
-    IrcLite] = main();
+const [commandParser, obsws, vc, tts, lifx, chat, spotify]: [
+  CommandParser,
+  OBSWebSocket,
+  VoiceCaptioning,
+  TTS,
+  LifxClient,
+  IrcLite,
+  SpotifyClient,
+] = main();
 
 let lastScene: SceneItem | null = null;
 let privacySource: number | string = '';
 let reconnectTimer: number | NodeJS.Timeout;
-
 
 try {
   commandParser.load('commands.json');
 } catch (ex) {
   tts.speak('Your stuff is broken, could not load commands dot jason');
 }
-
 
 obsws.on('obsws-open', (m: any) => {
   console.log('open', m);
@@ -59,7 +71,9 @@ obsws.on('obsws-message', (m: any) => {
 
 obsws.on('obsws-auth-required', (data: any) => {
   const { challenge, salt } = data;
-  render(`OBS Requires authentication, authenticating using challenge ${challenge}`);
+  render(
+    `OBS Requires authentication, authenticating using challenge ${challenge}`,
+  );
   const password = import.meta.env.VITE_OBS_WEBSOCKET_PASSWORD;
   obsws.authenticate(password, challenge, salt);
 });
@@ -81,29 +95,49 @@ obsws.on('obsws-authenticated', async () => {
   const username = import.meta.env.VITE_TWITCH_USERNAME.toLowerCase();
   const pass = import.meta.env.VITE_TWITCH_OAUTH_TOKEN;
   const hostname = `${username}.tmi.twitch.tv`;
-  chat.connect(
-    username,
-    username,
-    hostname,
-    pass,
-  );
+  chat.connect(username, username, hostname, pass);
+
+  if (localStorage.getItem('at')) {
+    const b64at = localStorage.getItem('at');
+    const plain = atob(b64at);
+    spotify.setToken(plain);
+    const profile = await spotify.getProfile();
+    console.log('Spotify', profile);
+  } else {
+    if (!window.location.search?.includes('code')) {
+      spotify.openAuthorizationUrl();
+    } else {
+      const code = window.location.search.substring(6);
+      window.history.pushState({}, '', '/');
+      const { access_token, refresh_token } =
+        await spotify.getAccessToken(code);
+
+      localStorage.setItem('rt', Buffer.from(refresh_token).toString('base64'));
+      localStorage.setItem('at', Buffer.from(access_token).toString('base64'));
+    }
+  }
+  console.log('Url', window.location);
 });
 
 obsws.on('obsws-error', (e) => {
   if (reconnectTimer > 0) {
     clearTimeout(reconnectTimer);
     reconnectTimer = setTimeout(() => {
-      obsws.connect(`ws://${import.meta.env.VITE_OBS_WEBSOCKET_HOST}:${import.meta.env.VITE_OBS_WEBSOCKET_PORT}`)
+      obsws.connect(
+        `ws://${import.meta.env.VITE_OBS_WEBSOCKET_HOST}:${import.meta.env.VITE_OBS_WEBSOCKET_PORT}`,
+      );
     }, 3000);
   }
   render(`Error connecting to WS: ${JSON.stringify(e)}`);
-
 });
 
 obsws.on('obsws-scene-list', (data) => {
-  const { responseData } = data
-  const { currentPreviewSceneName, currentProgramSceneName, scenes } = responseData;
-  const sceneList = document.getElementById('selSceneList') as HTMLSelectElement;
+  const { responseData } = data;
+  const { currentPreviewSceneName, currentProgramSceneName, scenes } =
+    responseData;
+  const sceneList = document.getElementById(
+    'selSceneList',
+  ) as HTMLSelectElement;
 
   // implemented a "clear" function
   do {
@@ -112,7 +146,9 @@ obsws.on('obsws-scene-list', (data) => {
 
   for (let scene of scenes) {
     sceneList.options.add(new Option(scene.sceneName, scene.sceneUuid));
-    if (scene.sceneName.toLowerCase() === currentProgramSceneName.toLowerCase()) {
+    if (
+      scene.sceneName.toLowerCase() === currentProgramSceneName.toLowerCase()
+    ) {
       console.log('Current Program Scene', scene);
       lastScene = scene;
       sceneList.options.selectedIndex = scene.sceneIndex;
@@ -124,7 +160,6 @@ obsws.on('obsws-scene-list', (data) => {
     console.log(e);
     obsws.setCurrentProgramSceneByUuid(e.currentTarget.value);
   });
-
 });
 
 obsws.on('obsws-scene-item-list', (e: any) => {
@@ -165,7 +200,9 @@ chat.on('irc-channel-join', (e) => {
   console.log(`${e.nick} has joined ${e.channel}`);
 });
 
-obsws.connect(`ws://${import.meta.env.VITE_OBS_WEBSOCKET_HOST}:${import.meta.env.VITE_OBS_WEBSOCKET_PORT}`);
+obsws.connect(
+  `ws://${import.meta.env.VITE_OBS_WEBSOCKET_HOST}:${import.meta.env.VITE_OBS_WEBSOCKET_PORT}`,
+);
 
 vc.initialize();
 
@@ -176,7 +213,7 @@ vc.onStart = (e: Event) => {
 vc.on('vc-start', () => {
   render('VoiceCaptioning has started...');
   console.log('vc has started');
-})
+});
 
 vc.on('vc-result', async (r: string[]) => {
   const caption = r.join('\n');
@@ -187,21 +224,9 @@ vc.on('vc-result', async (r: string[]) => {
 
   const foundCommand = commandParser.parseCommand(
     caption,
-    [
-      '$privacySource',
-      '$lastSceneUuid',
-      '$true',
-      '$false',
-    ],
-    [
-
-      privacySource,
-      lastScene?.sceneUuid,
-      true,
-      false
-    ]
+    ['$privacySource', '$lastSceneUuid', '$true', '$false', '$song'],
+    [privacySource, lastScene?.sceneUuid, true, false, spotify.getNowPlaying],
   );
-
 
   render(caption);
   obsws.sendCaption(caption.trim());
@@ -220,7 +245,10 @@ vc.on('vc-result', async (r: string[]) => {
       tts.speak(foundCommand.response);
       break;
     case 'chat':
-      chat.sendChannelMessage(`#${import.meta.env.VITE_TWITCH_USERNAME}`, foundCommand.response);
+      chat.sendChannelMessage(
+        `#${import.meta.env.VITE_TWITCH_USERNAME}`,
+        foundCommand.response,
+      );
       break;
     case 'obs':
       try {
@@ -235,15 +263,18 @@ vc.on('vc-result', async (r: string[]) => {
       break;
     case 'ai':
       try {
-        const selModelList: HTMLSelectElement | null = document.getElementById('selModelList')
+        const selModelList: HTMLSelectElement | null =
+          document.getElementById('selModelList');
 
         //const r = await OllamaClient.generate(foundCommand.response);
-        const model = selModelList && selModelList.selectedIndex > -1 ? selModelList.options[selModelList.selectedIndex].value.trim() : 'llama3.2'
+        const model =
+          selModelList && selModelList.selectedIndex > -1
+            ? selModelList.options[selModelList.selectedIndex].value.trim()
+            : 'llama3.2';
         const r = await OllamaClient.chat(
           OllamaRole.User,
           foundCommand.response,
           //'llama3.2'
-
         );
         if (r instanceof Error) {
           return;
@@ -255,14 +286,31 @@ vc.on('vc-result', async (r: string[]) => {
         console.warn(`Error parsing AI response`, error.message);
       }
       break;
+    case 'spotify':
+      const { command, args } = foundCommand;
+      if (command && typeof spotify[command] === 'function') {
+        console.log('Spotify', command);
+        const result = await spotify[command](...args);
+
+        if ('getCurrentSong' === command) {
+          const { artists, track, url } = result;
+          console.log('getCurrentSong', result);
+          chat.sendChannelMessage(
+            `#${import.meta.env.VITE_TWITCH_USERNAME}`,
+            `Currently listening to: ${track} by ${artists[0].name}.\nCheck it out at ${url}`,
+          );
+        }
+      } else {
+        console.log('Unknown call on spotify', command, args);
+      }
+      break;
     default:
       console.log('Unknown Action', foundCommand.action);
   }
 });
 
-
 /**
- * @name startCaptioning()
+ * @name startCaptioning()k
  * @method
  * @description Helper function to toggle the UI and start VoiceCaptioning
  */
@@ -300,10 +348,12 @@ const stopCaptioning = () => {
 const askAI = async () => {
   const prompt: HTMLTextAreaElement = document.getElementById('prompt');
   const out: HTMLDivElement = document.getElementById('ai-out');
-  const selModelList: HTMLSelectElement = document.getElementById('selModelList');
+  const selModelList: HTMLSelectElement =
+    document.getElementById('selModelList');
 
   try {
-    const model = selModelList?.options[selModelList?.options.selectedIndex].value;
+    const model =
+      selModelList?.options[selModelList?.options.selectedIndex].value;
     const r = await OllamaClient.chat(
       OllamaRole.User,
       prompt.value.trim(),
@@ -331,7 +381,7 @@ const resetPrompt = () => {
   const out: HTMLDivElement = document.getElementById('ai-out');
   out.textContent = '';
   prompt.value = '';
-}
+};
 
 /**
  * @name populateSceneList()
@@ -348,7 +398,8 @@ const populateSceneList = () => {
  * @description Function to populate the LLAMA select box.
  */
 const populateModelList = async () => {
-  const selModelList: HTMLSelectElement = document.getElementById('selModelList');
+  const selModelList: HTMLSelectElement =
+    document.getElementById('selModelList');
 
   try {
     const { models } = await OllamaClient.getModels();
@@ -360,10 +411,8 @@ const populateModelList = async () => {
     if (selModelList.options.length > 0) {
       selModelList.selectedIndex = 1;
     }
-
-  } catch (ex: unknown) { }
-
-}
+  } catch (ex: unknown) {}
+};
 
 /**
  * @name enableControls()
@@ -444,5 +493,4 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <h2 id="caption"></h2>
   </div>
 </div>
-`
-
+`;

@@ -72,6 +72,61 @@
       "pattern": "tts stop",
       "response": "<stop>",
       "action": "speak"
+    },
+    {
+      "pattern": "what song is this?",
+      "response": "getCurrentSong",
+      "action": "spotify",
+      "argTypes": [
+        "string",
+        "string"
+      ]
+    },
+    {
+      "pattern": "Next song",
+      "response": "playNextSong",
+      "action": "spotify",
+      "argTypes": [
+        "string",
+        "string"
+      ]
+    },
+    {
+      "pattern": "Previous song",
+      "response": "playPreviousSong",
+      "action": "spotify",
+      "argTypes": [
+        "string",
+        "string"
+      ]
+    },
+    {
+      "pattern": "Pause music",
+      "response": "pauseMusic",
+      "action": "spotify",
+      "argTypes": [
+        "string",
+        "string"
+      ]
+    },
+    {
+      "pattern": "Resume music",
+      "response": "resumeMusic",
+      "action": "spotify",
+      "argTypes": [
+        "string",
+        "string"
+      ]
+    },
+    {
+      "pattern": "(play song)(.+)",
+      "response": "playSong $2",
+      "action": "spotify",
+      "argTypes": [
+        "string",
+        "string",
+        "string"
+      ]
     }
   ]
 }
