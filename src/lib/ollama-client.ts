@@ -6,10 +6,10 @@ export type ChatResponse = {
   model: string;
   created_at: Date;
   message: {
-    role: OllamaRole,
+    role: OllamaRole;
     content: string;
     images: string;
-  }
+  };
   done: boolean;
   total_duration: number;
   load_duration: number;
@@ -24,28 +24,30 @@ export enum OllamaRole {
   User = 'user',
   Assistant = 'assistant',
   Tool = 'tool',
-};
+}
 
 const BASE_URL = import.meta.env.VITE_LLM_BASE_URL;
 
 class OllamaClient {
-  constructor() {
-  }
+  constructor() {}
 
-  static async generate(prompt: string, model = 'llama3.2', stream: boolean = false): Promise<GenerativeResponse | Error> {
+  static async generate(
+    prompt: string,
+    model = 'llama3.2',
+    stream: boolean = false,
+  ): Promise<GenerativeResponse | Error> {
     try {
       const payload = {
         model,
         prompt: prompt.trim(),
-        stream
+        stream,
       };
       const response = await fetch(`${BASE_URL}/api/generate`, {
         method: 'POST',
         headers: {
-          'Accept': 'application/json; charset="utf-8";'
+          Accept: 'application/json; charset="utf-8";',
         },
         body: JSON.stringify(payload),
-
       });
 
       if (response.ok) {
@@ -53,27 +55,32 @@ class OllamaClient {
       } else {
         return Promise.reject(response);
       }
-
     } catch (ex: unknown) {
       return Promise.reject(ex);
     }
   }
 
-  static async chat(role: OllamaRole, content: string, model = 'llama3.2'): Promise<ChatResponse | Error> {
+  static async chat(
+    role: OllamaRole,
+    content: string,
+    model = 'llama3.2',
+  ): Promise<ChatResponse | Error> {
     try {
       const payload = {
         model,
-        messages: [{
-          role,
-          content: content.trim(),
-        }],
+        messages: [
+          {
+            role,
+            content: content.trim(),
+          },
+        ],
         stream: false,
       };
 
       const response = await fetch(`${BASE_URL}/api/chat`, {
         method: 'POST',
         headers: {
-          'Accept': 'application/json; charset="utf-8";'
+          Accept: 'application/json; charset="utf-8";',
         },
         body: JSON.stringify(payload),
       });
@@ -83,7 +90,6 @@ class OllamaClient {
       } else {
         return Promise.reject(response);
       }
-
     } catch (ex: unknown) {
       return Promise.reject(ex);
     }
@@ -94,7 +100,7 @@ class OllamaClient {
       const response = await fetch(`${BASE_URL}/api/tags`, {
         method: 'GET',
         headers: {
-          'Accept': 'application/json; charset="utf-8";',
+          Accept: 'application/json; charset="utf-8";',
         },
       });
 
